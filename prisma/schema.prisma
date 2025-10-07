@@ -86,7 +86,6 @@ model IndustryInsight {
   demandLevel   String    // "High", "Medium", "Low"
   topSkills     String[]  // Most in-demand skills
   
-  // Market conditions
   marketOutlook String    // "Positive", "Neutral", "Negative"
   keyTrends     String[]  // Array of current industry trends
   
@@ -98,4 +97,3 @@ model IndustryInsight {
 
   @@index([industry])
 }
-`
