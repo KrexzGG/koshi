@@ -101,13 +101,13 @@ export async function generateCoverLetter(data) {
 
 export async function getCoverLetters() {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return []; // Return empty array instead of throwing
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
   });
 
-  if (!user) throw new Error("User not found");
+  if (!user) return []; // Return empty array instead of throwing
 
   return await db.coverLetter.findMany({
     where: {
@@ -121,13 +121,13 @@ export async function getCoverLetters() {
 
 export async function getCoverLetter(id) {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return null; // Return null instead of throwing
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
   });
 
-  if (!user) throw new Error("User not found");
+  if (!user) return null; // Return null instead of throwing
 
   // Use findFirst with both id and userId to ensure proper scoping
   return await db.coverLetter.findFirst({
