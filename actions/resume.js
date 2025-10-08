@@ -41,20 +41,25 @@ export async function saveResume(content) {
 }
 
 export async function getResume() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  try {
+    const { userId } = await auth();
+    if (!userId) return null;
 
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
 
-  if (!user) throw new Error("User not found");
+    if (!user) return null;
 
-  return await db.resume.findUnique({
-    where: {
-      userId: user.id,
-    },
-  });
+    return await db.resume.findUnique({
+      where: {
+        userId: user.id,
+      },
+    });
+  } catch (error) {
+    console.error("getResume error:", error);
+    return null;
+  }
 }
 
 export async function improveWithAI({ current, type }) {
