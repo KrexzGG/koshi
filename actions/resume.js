@@ -57,7 +57,7 @@ export async function getResume() {
       },
     });
   } catch (error) {
-    console.error("getResume error:", error);
+    console.error("Error fetching resume:", error);
     return null;
   }
 }

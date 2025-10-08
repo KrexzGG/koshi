@@ -175,7 +175,6 @@ export default function ResumeBuilder({ initialContent }) {
       }, 500);
       
     } catch (error) {
-      console.error("PDF generation error:", error);
       toast.error(`Failed to generate PDF: ${error.message}`);
     } finally {
       setIsGenerating(false);
@@ -186,13 +185,13 @@ export default function ResumeBuilder({ initialContent }) {
     try {
       const combinedContent = getCombinedContent();
       const formattedContent = combinedContent
-        .replace(/\n/g, "\n") // Normalize newlines
-        .replace(/\n\s*\n/g, "\n\n") // Normalize multiple newlines to double newlines
+        .replace(/\n/g, "\n")
+        .replace(/\n\s*\n/g, "\n\n")
         .trim();
 
       await saveResumeFn(formattedContent);
     } catch (error) {
-      console.error("Save error:", error);
+      toast.error("Failed to save resume");
     }
   };
 

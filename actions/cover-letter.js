@@ -17,7 +17,6 @@ export async function generateCoverLetter(data) {
 
   if (!user) throw new Error("User not found");
 
-  // Compute current date in a readable business format (e.g., "October 7, 2025")
   const formattedDate = new Date().toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -101,13 +100,13 @@ export async function generateCoverLetter(data) {
 
 export async function getCoverLetters() {
   const { userId } = await auth();
-  if (!userId) return []; // Return empty array instead of throwing
+  if (!userId) return [];
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
   });
 
-  if (!user) return []; // Return empty array instead of throwing
+  if (!user) return [];
 
   return await db.coverLetter.findMany({
     where: {
@@ -121,15 +120,14 @@ export async function getCoverLetters() {
 
 export async function getCoverLetter(id) {
   const { userId } = await auth();
-  if (!userId) return null; // Return null instead of throwing
+  if (!userId) return null;
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
   });
 
-  if (!user) return null; // Return null instead of throwing
+  if (!user) return null;
 
-  // Use findFirst with both id and userId to ensure proper scoping
   return await db.coverLetter.findFirst({
     where: {
       id,
@@ -148,7 +146,6 @@ export async function deleteCoverLetter(id) {
 
   if (!user) throw new Error("User not found");
 
-  // Delete scoped to both id and userId; deleteMany avoids unique constraint errors
   await db.coverLetter.deleteMany({
     where: {
       id,

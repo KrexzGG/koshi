@@ -4,21 +4,16 @@ import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Check if API key is available
-if (!process.env.GEMINI_API_KEY) {
-  console.error("GEMINI_API_KEY is not set in environment variables");
+function getGeminiModel() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Configuration error: GEMINI_API_KEY is not set. Add it to your environment to use mock interview generation."
+    );
+  }
+  const genAI = new GoogleGenerativeAI(apiKey);
+  return genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 }
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  generationConfig: {
-    responseMimeType: "application/json",
-    temperature: 0.6,
-    maxOutputTokens: 1024,
-  },
-});
-
 
 export async function generateQuiz() {
   const { userId } = await auth();
@@ -35,53 +30,57 @@ export async function generateQuiz() {
   if (!user) throw new Error("User not found");
 
   const prompt = `
-    Generate 10 technical interview questions for a ${user.industry} professional${
-      user.skills?.length ? ` with expertise in ${user.skills.join(", ")}` : ""
-    }.
-
+    Generate 10 technical interview questions for a ${
+      user.industry
+    } professional${
+    user.skills?.length ? ` with expertise in ${user.skills.join(", ")}` : ""
+  }.
+    
     Each question should be multiple choice with 4 options.
-
-    IMPORTANT: Do NOT include explanations. Explanations will be requested later per question.
-
-    Return strictly JSON with this schema (no code fences, no prose):
+    
+    Return the response in this JSON format only, no additional text:
     {
       "questions": [
         {
           "question": "string",
           "options": ["string", "string", "string", "string"],
-          "correctAnswer": "string"
+          "correctAnswer": "string",
+          "explanation": "string"
         }
       ]
     }
   `;
 
   try {
+    const model = getGeminiModel();
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    
-    // Clean the response text to handle markdown formatting
-    const cleanedText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    
-    let quiz;
-    try {
-      quiz = JSON.parse(cleanedText);
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError);
-      console.error("Raw response:", text);
-      console.error("Cleaned text:", cleanedText);
-      throw new Error("Failed to parse quiz response from AI");
-    }
-
-    // Validate the response structure
-    if (!quiz.questions || !Array.isArray(quiz.questions)) {
-      console.error("Invalid quiz structure:", quiz);
-      throw new Error("Invalid quiz structure received from AI");
-    }
+    const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
+    const quiz = JSON.parse(cleanedText);
 
     return quiz.questions;
   } catch (error) {
     console.error("Error generating quiz:", error);
+    const isProd = process.env.NODE_ENV === "production";
+    if (!isProd) {
+      const fallbackQuestions = Array.from({ length: 10 }).map((_, i) => ({
+        question: `Sample question ${i + 1}: What does HTTP stand for?`,
+        options: [
+          "HyperText Transfer Protocol",
+          "High Task Transfer Process",
+          "Hyperlink Text Transmission",
+          "Host Transfer Text Protocol",
+        ],
+        correctAnswer: "HyperText Transfer Protocol",
+        explanation:
+          "HTTP stands for HyperText Transfer Protocol, the foundation of data communication on the web.",
+      }));
+      return fallbackQuestions;
+    }
+    if (error.message?.includes("GEMINI_API_KEY")) {
+      throw new Error("Configuration error: GEMINI_API_KEY is not set.");
+    }
     throw new Error("Failed to generate quiz questions");
   }
 }
@@ -104,10 +103,8 @@ export async function saveQuizResult(questions, answers, score) {
     explanation: q.explanation,
   }));
 
-  // Get wrong answers
   const wrongAnswers = questionResults.filter((q) => !q.isCorrect);
 
-  // Only generate improvement tips if there are wrong answers
   let improvementTip = null;
   if (wrongAnswers.length > 0) {
     const wrongQuestionsText = wrongAnswers
@@ -129,13 +126,11 @@ export async function saveQuizResult(questions, answers, score) {
     `;
 
     try {
+      const model = getGeminiModel();
       const tipResult = await model.generateContent(improvementPrompt);
-
       improvementTip = tipResult.response.text().trim();
-      console.log(improvementTip);
     } catch (error) {
       console.error("Error generating improvement tip:", error);
-      // Continue without improvement tip if generation fails
     }
   }
 
@@ -177,8 +172,8 @@ export async function explainQuestion(question, correctAnswer) {
   `;
 
   try {
-    const freeformModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await freeformModel.generateContent(prompt);
+    const model = getGeminiModel();
+    const result = await model.generateContent(prompt);
     return result.response.text().trim();
   } catch (error) {
     console.error("Error explaining question:", error);

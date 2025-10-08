@@ -71,8 +71,7 @@ const OnboardingForm = ({ industries }) => {
       
       await updateUserFn(submitData);
     } catch (error) {
-      console.error("Onboarding error:", error);
-      // Error is already handled by useFetch hook
+      toast.error("Failed to complete profile");
     }
   };
 

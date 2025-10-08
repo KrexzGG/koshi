@@ -16,20 +16,16 @@ export async function updateUser(data) {
   if (!user) throw new Error("User not found");
 
   try {
-    // Start a transaction to handle both operations
     const result = await db.$transaction(
       async (tx) => {
-        // First check if industry exists
         let industryInsight = await tx.industryInsight.findUnique({
           where: {
             industry: data.industry,
           },
         });
 
-        // If industry doesn't exist, create it with default values
         if (!industryInsight) {
           try {
-            // Add timeout wrapper for AI generation
             const insightsPromise = generateAIInsights(data.industry);
             const timeoutPromise = new Promise((_, reject) => 
               setTimeout(() => reject(new Error('AI generation timeout')), 10000)
@@ -46,7 +42,6 @@ export async function updateUser(data) {
             });
           } catch (aiError) {
             console.warn("AI generation failed during onboarding, creating with default values:", aiError);
-            // Create with default values if AI generation fails
             industryInsight = await tx.industryInsight.create({
               data: {
                 industry: data.industry,
@@ -69,7 +64,6 @@ export async function updateUser(data) {
           }
         }
 
-        // Now update the user
         const updatedUser = await tx.user.update({
           where: {
             id: user.id,
@@ -85,7 +79,7 @@ export async function updateUser(data) {
         return { updatedUser, industryInsight };
       },
       {
-        timeout: 30000, // Increased to 30 seconds
+        timeout: 30000,
       }
     );
 
@@ -94,7 +88,6 @@ export async function updateUser(data) {
   } catch (error) {
     console.error("Error updating user and industry:", error);
     
-    // Provide more specific error messages
     if (error.message.includes("Unique constraint")) {
       throw new Error("This industry already exists. Please try again.");
     } else if (error.message.includes("timeout")) {
@@ -109,7 +102,7 @@ export async function updateUser(data) {
 
 export async function getUserOnboardingStatus() {
   const { userId } = await auth();
-  if (!userId) return { isOnboarded: false }; // Return default instead of throwing
+  if (!userId) return { isOnboarded: false };
 
   try {
     const user = await db.user.findUnique({
@@ -126,6 +119,6 @@ export async function getUserOnboardingStatus() {
     };
   } catch (error) {
     console.error("Error checking onboarding status:", error);
-    return { isOnboarded: false }; // Return default instead of throwing
+    return { isOnboarded: false };
   }
 }
