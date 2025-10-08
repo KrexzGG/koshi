@@ -57,6 +57,19 @@ export default function Quiz() {
     const newLocked = [...locked];
     newLocked[currentQuestion] = true;
     setLocked(newLocked);
+
+    // Prefetch next question explanation in background
+    const nextIndex = currentQuestion + 1;
+    if (quizData && nextIndex < quizData.length && !explanations[nextIndex]) {
+      const nextQ = quizData[nextIndex];
+      explainQuestion(nextQ.question, nextQ.correctAnswer)
+        .then((text) => {
+          setExplanations((prev) => ({ ...prev, [nextIndex]: text }));
+        })
+        .catch(() => {
+          // ignore prefetch errors
+        });
+    }
   };
 
   const handleNext = () => {

@@ -14,6 +14,9 @@ const model = genAI.getGenerativeModel({
   },
 });
 
+// Simple in-memory cache for generated quizzes per user
+const quizCache = new Map(); // key: userId, value: { expiresAt: number, questions: any[] }
+
 export async function generateQuiz() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -27,6 +30,13 @@ export async function generateQuiz() {
   });
 
   if (!user) throw new Error("User not found");
+
+  // Serve from cache if fresh
+  const cached = quizCache.get(userId);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return cached.questions;
+  }
 
   const prompt = `
     Generate 10 technical interview questions for a ${user.industry} professional$${
@@ -54,6 +64,12 @@ export async function generateQuiz() {
     const response = result.response;
     const text = response.text();
     const quiz = JSON.parse(text);
+
+    // cache for 5 minutes
+    quizCache.set(userId, {
+      expiresAt: now + 5 * 60 * 1000,
+      questions: quiz.questions,
+    });
 
     return quiz.questions;
   } catch (error) {
