@@ -125,26 +125,24 @@ export async function generateQuiz() {
     return cached.questions;
   }
 
-  const prompt = `
-    Generate 10 technical interview questions for a ${user.industry} professional$${
+  const prompt = `Generate 10 technical interview questions for a ${user.industry} professional${
       user.skills?.length ? ` with expertise in ${user.skills.join(", ")}` : ""
     }.
 
-    Each question should be multiple choice with 4 options.
+Each question should be multiple choice with 4 options.
 
-    IMPORTANT: Do NOT include explanations. Explanations will be requested later per question.
+CRITICAL: Return ONLY valid JSON. No markdown, no code fences, no explanations, no additional text.
 
-    Return strictly JSON with this schema (no code fences, no prose):
+Required JSON format:
+{
+  "questions": [
     {
-      "questions": [
-        {
-          "question": "string",
-          "options": ["string", "string", "string", "string"],
-          "correctAnswer": "string"
-        }
-      ]
+      "question": "What is the primary purpose of version control?",
+      "options": ["Store files", "Track changes", "Compile code", "Debug apps"],
+      "correctAnswer": "Track changes"
     }
-  `;
+  ]
+}`;
 
   try {
     const result = await model.generateContent(prompt);
@@ -153,22 +151,42 @@ export async function generateQuiz() {
     
     console.log("Raw Gemini response:", text);
     
-    // Clean the response text
-    const cleanedText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    // Clean the response text more aggressively
+    let cleanedText = text
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .replace(/^[^{]*/, "") // Remove any text before the first {
+      .replace(/[^}]*$/, "") // Remove any text after the last }
+      .trim();
+    
+    // If still no valid JSON, try to extract JSON from the text
+    if (!cleanedText.startsWith('{')) {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanedText = jsonMatch[0];
+      }
+    }
+    
+    console.log("Cleaned text for parsing:", cleanedText);
     
     let quiz;
     try {
       quiz = JSON.parse(cleanedText);
     } catch (parseError) {
       console.error("JSON parse error:", parseError);
+      console.error("Original text:", text);
       console.error("Cleaned text:", cleanedText);
-      throw new Error("Failed to parse quiz response from AI");
+      
+      // Try to return fallback quiz instead of throwing
+      console.log("Returning fallback quiz due to parse error");
+      return getFallbackQuiz(user.industry, user.skills);
     }
 
     // Validate the response structure
     if (!quiz.questions || !Array.isArray(quiz.questions)) {
       console.error("Invalid quiz structure:", quiz);
-      throw new Error("Invalid quiz structure received from AI");
+      console.log("Returning fallback quiz due to invalid structure");
+      return getFallbackQuiz(user.industry, user.skills);
     }
 
     // cache for 5 minutes
