@@ -26,7 +26,7 @@ import { resumeSchema } from "@/app/lib/schema";
 
 export default function ResumeBuilder({ initialContent }) {
   const [activeTab, setActiveTab] = useState("edit");
-  const [previewContent, setPreviewContent] = useState(initialContent);
+  const [previewContent, setPreviewContent] = useState(initialContent || "");
   const { user } = useUser();
   const [resumeMode, setResumeMode] = useState("preview");
 
@@ -59,16 +59,16 @@ export default function ResumeBuilder({ initialContent }) {
   const formValues = watch();
 
   useEffect(() => {
-    if (initialContent) setActiveTab("preview");
+    if (initialContent && initialContent.trim()) setActiveTab("preview");
   }, [initialContent]);
 
   // Update preview content when form values change
   useEffect(() => {
     if (activeTab === "edit") {
       const newContent = getCombinedContent();
-      setPreviewContent(newContent ? newContent : initialContent);
+      setPreviewContent(newContent ? newContent : (initialContent || ""));
     }
-  }, [formValues, activeTab]);
+  }, [formValues, activeTab, initialContent]);
 
   // Handle save result
   useEffect(() => {
