@@ -55,7 +55,7 @@ export const generateAIInsights = async (industry) => {
 
 export async function getIndustryInsights() {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return null; // Return null instead of throwing
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
@@ -64,11 +64,11 @@ export async function getIndustryInsights() {
     },
   });
 
-  if (!user) throw new Error("User not found");
+  if (!user) return null; // Return null instead of throwing
 
   // Check if user has an industry set
   if (!user.industry) {
-    throw new Error("User industry not set. Please complete onboarding first.");
+    return null; // Return null instead of throwing
   }
 
   // If no insights exist, generate them with a timeout fallback to keep load fast

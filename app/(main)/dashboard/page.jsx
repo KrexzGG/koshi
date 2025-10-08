@@ -16,6 +16,11 @@ const IndustryInsightsPage = async () => {
     getGlobalTechStacks(),
   ]);
 
+  // Handle case where insights might be null
+  if (!insights) {
+    redirect("/onboarding");
+  }
+
   return (
     <div className="container mx-auto">
       <DashboardView insights={insights} globalInsights={globalInsights} techStacks={techStacks} />
