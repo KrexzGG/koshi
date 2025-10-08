@@ -1,12 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 const useFetch = (cb) => {
   const [data, setData] = useState(undefined);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(null);
   const [error, setError] = useState(null);
 
-  const fn = useCallback(async (...args) => {
+  const fn = async (...args) => {
     setLoading(true);
     setError(null);
 
@@ -14,15 +14,13 @@ const useFetch = (cb) => {
       const response = await cb(...args);
       setData(response);
       setError(null);
-      return response;
     } catch (error) {
       setError(error);
-      toast.error(error.message || "An error occurred");
-      throw error;
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }
-  }, [cb]);
+  };
 
   return { data, loading, error, fn, setData };
 };
