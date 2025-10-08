@@ -136,7 +136,7 @@ export default function Quiz() {
         </CardContent>
         <CardFooter>
           <Button onClick={generateQuizFn} className="w-full">
-            Start Quiz
+            {generatingQuiz ? "Preparing..." : "Start Quiz"}
           </Button>
         </CardFooter>
       </Card>
