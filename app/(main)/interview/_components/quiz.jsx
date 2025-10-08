@@ -24,12 +24,18 @@ export default function Quiz() {
   const [explanations, setExplanations] = useState({});
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [locked, setLocked] = useState([]);
+  const [isClient, setIsClient] = useState(false);
 
   const {
     loading: generatingQuiz,
     fn: generateQuizFn,
     data: quizData,
   } = useFetch(generateQuiz);
+
+  // Ensure we're on the client side before making any server actions
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const {
     loading: savingResult,
@@ -109,6 +115,20 @@ export default function Quiz() {
     setResultData(null);
   };
 
+  // Don't render anything until we're on the client side
+  if (!isClient) {
+    return (
+      <Card className="mx-2">
+        <CardHeader>
+          <CardTitle>Loading...</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Preparing your quiz...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (generatingQuiz) {
     return <BarLoader className="mt-4" width={"100%"} color="gray" />;
   }
@@ -136,7 +156,7 @@ export default function Quiz() {
         </CardContent>
         <CardFooter>
           <Button onClick={generateQuizFn} className="w-full">
-            Start Quiz
+            {generatingQuiz ? "Preparing..." : "Start Quiz"}
           </Button>
         </CardFooter>
       </Card>
