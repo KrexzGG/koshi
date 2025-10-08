@@ -125,24 +125,26 @@ export async function generateQuiz() {
     return cached.questions;
   }
 
-  const prompt = `Generate 10 technical interview questions for a ${user.industry} professional${
+  const prompt = `
+    Generate 10 technical interview questions for a ${user.industry} professional${
       user.skills?.length ? ` with expertise in ${user.skills.join(", ")}` : ""
     }.
 
-Each question should be multiple choice with 4 options.
+    Each question should be multiple choice with 4 options.
 
-CRITICAL: Return ONLY valid JSON. No markdown, no code fences, no explanations, no additional text.
+    IMPORTANT: Do NOT include explanations. Explanations will be requested later per question.
 
-Required JSON format:
-{
-  "questions": [
+    Return strictly JSON with this schema (no code fences, no prose):
     {
-      "question": "What is the primary purpose of version control?",
-      "options": ["Store files", "Track changes", "Compile code", "Debug apps"],
-      "correctAnswer": "Track changes"
+      "questions": [
+        {
+          "question": "string",
+          "options": ["string", "string", "string", "string"],
+          "correctAnswer": "string"
+        }
+      ]
     }
-  ]
-}`;
+  `;
 
   try {
     const result = await model.generateContent(prompt);
