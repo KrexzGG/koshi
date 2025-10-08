@@ -4,9 +4,14 @@ import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Check if API key is available
+if (!process.env.GEMINI_API_KEY) {
+  console.error("GEMINI_API_KEY is not set in environment variables");
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
+  model: "gemini-1.5-flash",
   generationConfig: {
     responseMimeType: "application/json",
     temperature: 0.6,
@@ -16,6 +21,76 @@ const model = genAI.getGenerativeModel({
 
 // Simple in-memory cache for generated quizzes per user
 const quizCache = new Map(); // key: userId, value: { expiresAt: number, questions: any[] }
+
+// Fallback quiz when API is not available
+function getFallbackQuiz(industry, skills) {
+  const baseQuestions = [
+    {
+      question: "What is the primary purpose of version control systems like Git?",
+      options: [
+        "To store large files",
+        "To track changes in code and collaborate with others",
+        "To compile code faster",
+        "To debug applications"
+      ],
+      correctAnswer: "To track changes in code and collaborate with others"
+    },
+    {
+      question: "Which of the following is NOT a programming paradigm?",
+      options: [
+        "Object-Oriented Programming",
+        "Functional Programming",
+        "Procedural Programming",
+        "Database Programming"
+      ],
+      correctAnswer: "Database Programming"
+    },
+    {
+      question: "What does API stand for?",
+      options: [
+        "Application Programming Interface",
+        "Advanced Programming Integration",
+        "Automated Program Interface",
+        "Application Process Integration"
+      ],
+      correctAnswer: "Application Programming Interface"
+    },
+    {
+      question: "Which HTTP method is typically used to retrieve data?",
+      options: ["POST", "PUT", "GET", "DELETE"],
+      correctAnswer: "GET"
+    },
+    {
+      question: "What is the main advantage of using a database?",
+      options: [
+        "Faster internet connection",
+        "Organized storage and retrieval of data",
+        "Better user interface",
+        "Automatic code generation"
+      ],
+      correctAnswer: "Organized storage and retrieval of data"
+    }
+  ];
+
+  // Add industry-specific questions if available
+  if (industry) {
+    const industryQuestions = [
+      {
+        question: `In ${industry}, what is the most important skill for career growth?`,
+        options: [
+          "Memorizing all tools",
+          "Continuous learning and adaptation",
+          "Working alone",
+          "Avoiding new technologies"
+        ],
+        correctAnswer: "Continuous learning and adaptation"
+      }
+    ];
+    baseQuestions.push(...industryQuestions);
+  }
+
+  return baseQuestions.slice(0, 10); // Return up to 10 questions
+}
 
 export async function generateQuiz() {
   const { userId } = await auth();
@@ -30,6 +105,12 @@ export async function generateQuiz() {
   });
 
   if (!user) throw new Error("User not found");
+
+  // Check if API key is available
+  if (!process.env.GEMINI_API_KEY) {
+    console.error("GEMINI_API_KEY is not set. Returning fallback quiz.");
+    return getFallbackQuiz(user.industry, user.skills);
+  }
 
   // Serve from cache if fresh
   const cached = quizCache.get(userId);
@@ -63,7 +144,26 @@ export async function generateQuiz() {
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    const quiz = JSON.parse(text);
+    
+    console.log("Raw Gemini response:", text);
+    
+    // Clean the response text
+    const cleanedText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    
+    let quiz;
+    try {
+      quiz = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      console.error("Cleaned text:", cleanedText);
+      throw new Error("Failed to parse quiz response from AI");
+    }
+
+    // Validate the response structure
+    if (!quiz.questions || !Array.isArray(quiz.questions)) {
+      console.error("Invalid quiz structure:", quiz);
+      throw new Error("Invalid quiz structure received from AI");
+    }
 
     // cache for 5 minutes
     quizCache.set(userId, {
@@ -74,6 +174,9 @@ export async function generateQuiz() {
     return quiz.questions;
   } catch (error) {
     console.error("Error generating quiz:", error);
+    if (error.message.includes("parse") || error.message.includes("structure")) {
+      throw error;
+    }
     throw new Error("Failed to generate quiz questions");
   }
 }
