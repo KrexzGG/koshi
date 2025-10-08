@@ -59,7 +59,25 @@ export async function generateQuiz() {
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    const quiz = JSON.parse(text);
+    
+    // Clean the response text to handle markdown formatting
+    const cleanedText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    
+    let quiz;
+    try {
+      quiz = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      console.error("Raw response:", text);
+      console.error("Cleaned text:", cleanedText);
+      throw new Error("Failed to parse quiz response from AI");
+    }
+
+    // Validate the response structure
+    if (!quiz.questions || !Array.isArray(quiz.questions)) {
+      console.error("Invalid quiz structure:", quiz);
+      throw new Error("Invalid quiz structure received from AI");
+    }
 
     return quiz.questions;
   } catch (error) {
