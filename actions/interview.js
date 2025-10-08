@@ -5,7 +5,14 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+  generationConfig: {
+    responseMimeType: "application/json",
+    temperature: 0.6,
+    maxOutputTokens: 1024,
+  },
+});
 
 export async function generateQuiz() {
   const { userId } = await auth();
@@ -22,22 +29,21 @@ export async function generateQuiz() {
   if (!user) throw new Error("User not found");
 
   const prompt = `
-    Generate 10 technical interview questions for a ${
-      user.industry
-    } professional${
-    user.skills?.length ? ` with expertise in ${user.skills.join(", ")}` : ""
-  }.
-    
+    Generate 10 technical interview questions for a ${user.industry} professional$${
+      user.skills?.length ? ` with expertise in ${user.skills.join(", ")}` : ""
+    }.
+
     Each question should be multiple choice with 4 options.
-    
-    Return the response in this JSON format only, no additional text:
+
+    IMPORTANT: Do NOT include explanations. Explanations will be requested later per question.
+
+    Return strictly JSON with this schema (no code fences, no prose):
     {
       "questions": [
         {
           "question": "string",
           "options": ["string", "string", "string", "string"],
-          "correctAnswer": "string",
-          "explanation": "string"
+          "correctAnswer": "string"
         }
       ]
     }
@@ -47,8 +53,7 @@ export async function generateQuiz() {
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-    const quiz = JSON.parse(cleanedText);
+    const quiz = JSON.parse(text);
 
     return quiz.questions;
   } catch (error) {
@@ -125,6 +130,35 @@ export async function saveQuizResult(questions, answers, score) {
   } catch (error) {
     console.error("Error saving quiz result:", error);
     throw new Error("Failed to save quiz result");
+  }
+}
+
+export async function explainQuestion(question, correctAnswer) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const user = await db.user.findUnique({
+    where: { clerkUserId: userId },
+    select: { industry: true },
+  });
+
+  if (!user) throw new Error("User not found");
+
+  const prompt = `
+    Provide a concise explanation for why the following answer is correct in a ${user.industry} interview context.
+    Keep under 4 sentences, practical and clear.
+
+    Question: ${question}
+    Correct Answer: ${correctAnswer}
+  `;
+
+  try {
+    const freeformModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const result = await freeformModel.generateContent(prompt);
+    return result.response.text().trim();
+  } catch (error) {
+    console.error("Error explaining question:", error);
+    throw new Error("Failed to generate explanation");
   }
 }
 

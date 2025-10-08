@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { generateQuiz, saveQuizResult } from "@/actions/interview";
+import { generateQuiz, saveQuizResult, explainQuestion } from "@/actions/interview";
 import QuizResult from "./quiz-result";
 import useFetch from "@/hooks/use-fetch";
 import { BarLoader } from "react-spinners";
@@ -21,6 +21,8 @@ export default function Quiz() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [explanations, setExplanations] = useState({});
+  const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [locked, setLocked] = useState([]);
 
   const {
@@ -130,6 +132,24 @@ export default function Quiz() {
 
   const question = quizData[currentQuestion];
 
+  const fetchExplanation = async () => {
+    const q = quizData[currentQuestion];
+    if (explanations[currentQuestion]) {
+      setShowExplanation(true);
+      return;
+    }
+    try {
+      setLoadingExplanation(true);
+      const text = await explainQuestion(q.question, q.correctAnswer);
+      setExplanations((prev) => ({ ...prev, [currentQuestion]: text }));
+      setShowExplanation(true);
+    } catch (e) {
+      toast.error("Failed to load explanation");
+    } finally {
+      setLoadingExplanation(false);
+    }
+  };
+
   return (
     <Card className="mx-2">
       <CardHeader>
@@ -159,7 +179,9 @@ export default function Quiz() {
         {showExplanation && (
           <div className="mt-4 p-4 bg-muted rounded-lg">
             <p className="font-medium">Explanation:</p>
-            <p className="text-muted-foreground">{question.explanation}</p>
+            <p className="text-muted-foreground">
+              {explanations[currentQuestion]}
+            </p>
           </div>
         )}
       </CardContent>
@@ -176,10 +198,10 @@ export default function Quiz() {
 
         {locked[currentQuestion] && !showExplanation && (
           <Button
-            onClick={() => setShowExplanation(true)}
+            onClick={fetchExplanation}
             variant="outline"
           >
-            Show Explanation
+            {loadingExplanation ? "Loading..." : "Show Explanation"}
           </Button>
         )}
 
