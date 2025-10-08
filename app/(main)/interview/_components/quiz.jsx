@@ -14,7 +14,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { generateQuiz, saveQuizResult, explainQuestion } from "@/actions/interview";
 import QuizResult from "./quiz-result";
-import useFetch from "@/hooks/use-fetch";
 import { BarLoader } from "react-spinners";
 
 export default function Quiz() {
@@ -24,25 +23,16 @@ export default function Quiz() {
   const [explanations, setExplanations] = useState({});
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [locked, setLocked] = useState([]);
-  const [isClient, setIsClient] = useState(false);
+  const [quizData, setQuizData] = useState(null);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultData, setResultData] = useState(null);
+  const [mounted, setMounted] = useState(false);
 
-  const {
-    loading: generatingQuiz,
-    fn: generateQuizFn,
-    data: quizData,
-  } = useFetch(generateQuiz);
-
-  // Ensure we're on the client side before making any server actions
+  // Ensure component is mounted on client side
   useEffect(() => {
-    setIsClient(true);
+    setMounted(true);
   }, []);
-
-  const {
-    loading: savingResult,
-    fn: saveQuizResultFn,
-    data: resultData,
-    setData: setResultData,
-  } = useFetch(saveQuizResult);
 
   useEffect(() => {
     if (quizData) {
@@ -50,6 +40,18 @@ export default function Quiz() {
       setLocked(new Array(quizData.length).fill(false));
     }
   }, [quizData]);
+
+  const handleGenerateQuiz = async () => {
+    setGeneratingQuiz(true);
+    try {
+      const questions = await generateQuiz();
+      setQuizData(questions);
+    } catch (error) {
+      toast.error(error.message || "Failed to generate quiz");
+    } finally {
+      setGeneratingQuiz(false);
+    }
+  };
 
   const handleAnswer = (answer) => {
     if (locked[currentQuestion]) return;
@@ -99,11 +101,15 @@ export default function Quiz() {
 
   const finishQuiz = async () => {
     const score = calculateScore();
+    setSavingResult(true);
     try {
-      await saveQuizResultFn(quizData, answers, score);
+      const result = await saveQuizResult(quizData, answers, score);
+      setResultData(result);
       toast.success("Quiz completed!");
     } catch (error) {
       toast.error(error.message || "Failed to save quiz results");
+    } finally {
+      setSavingResult(false);
     }
   };
 
@@ -111,12 +117,32 @@ export default function Quiz() {
     setCurrentQuestion(0);
     setAnswers([]);
     setShowExplanation(false);
-    generateQuizFn();
+    setExplanations({});
+    setQuizData(null);
     setResultData(null);
+    handleGenerateQuiz();
   };
 
-  // Don't render anything until we're on the client side
-  if (!isClient) {
+  const fetchExplanation = async () => {
+    const q = quizData[currentQuestion];
+    if (explanations[currentQuestion]) {
+      setShowExplanation(true);
+      return;
+    }
+    try {
+      setLoadingExplanation(true);
+      const text = await explainQuestion(q.question, q.correctAnswer);
+      setExplanations((prev) => ({ ...prev, [currentQuestion]: text }));
+      setShowExplanation(true);
+    } catch (e) {
+      toast.error("Failed to load explanation");
+    } finally {
+      setLoadingExplanation(false);
+    }
+  };
+
+  // Don't render until mounted on client side
+  if (!mounted) {
     return (
       <Card className="mx-2">
         <CardHeader>
@@ -130,7 +156,19 @@ export default function Quiz() {
   }
 
   if (generatingQuiz) {
-    return <BarLoader className="mt-4" width={"100%"} color="gray" />;
+    return (
+      <Card className="mx-2">
+        <CardHeader>
+          <CardTitle>Preparing your quiz...</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground mb-4">
+            Generating industry-specific questions tailored to your profile. This might take a moment.
+          </p>
+          <BarLoader className="mt-4" width={"100%"} color="gray" />
+        </CardContent>
+      </Card>
+    );
   }
 
   // Show results if quiz is completed
@@ -155,7 +193,7 @@ export default function Quiz() {
           </p>
         </CardContent>
         <CardFooter>
-          <Button onClick={generateQuizFn} className="w-full">
+          <Button onClick={handleGenerateQuiz} className="w-full" disabled={generatingQuiz}>
             {generatingQuiz ? "Preparing..." : "Start Quiz"}
           </Button>
         </CardFooter>
@@ -164,24 +202,6 @@ export default function Quiz() {
   }
 
   const question = quizData[currentQuestion];
-
-  const fetchExplanation = async () => {
-    const q = quizData[currentQuestion];
-    if (explanations[currentQuestion]) {
-      setShowExplanation(true);
-      return;
-    }
-    try {
-      setLoadingExplanation(true);
-      const text = await explainQuestion(q.question, q.correctAnswer);
-      setExplanations((prev) => ({ ...prev, [currentQuestion]: text }));
-      setShowExplanation(true);
-    } catch (e) {
-      toast.error("Failed to load explanation");
-    } finally {
-      setLoadingExplanation(false);
-    }
-  };
 
   return (
     <Card className="mx-2">
@@ -233,6 +253,7 @@ export default function Quiz() {
           <Button
             onClick={fetchExplanation}
             variant="outline"
+            disabled={loadingExplanation}
           >
             {loadingExplanation ? "Loading..." : "Show Explanation"}
           </Button>
@@ -244,10 +265,7 @@ export default function Quiz() {
             disabled={savingResult}
             className="ml-auto"
           >
-            {savingResult && (
-              <BarLoader className="mt-4" width={"100%"} color="gray" />
-            )}
-            {currentQuestion < quizData.length - 1
+            {savingResult ? "Saving..." : currentQuestion < quizData.length - 1
               ? "Next Question"
               : "Finish Quiz"}
           </Button>

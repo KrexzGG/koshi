@@ -180,13 +180,13 @@ export async function explainQuestion(question, correctAnswer) {
 
 export async function getAssessments() {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return []; // Return empty array instead of throwing
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
   });
 
-  if (!user) throw new Error("User not found");
+  if (!user) return []; // Return empty array instead of throwing
 
   try {
     const assessments = await db.assessment.findMany({
@@ -201,6 +201,6 @@ export async function getAssessments() {
     return assessments;
   } catch (error) {
     console.error("Error fetching assessments:", error);
-    throw new Error("Failed to fetch assessments");
+    return []; // Return empty array instead of throwing
   }
 }
